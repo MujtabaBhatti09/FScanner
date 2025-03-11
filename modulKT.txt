@@ -1,0 +1,9 @@
+fun useFGTitSDK(promise: Promise) {
+        try {
+            val sdk = FGTitSDK() // Replace with actual SDK class
+            val result = sdk.someMethod() // Replace with an actual method
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e)
+        }
+    }
