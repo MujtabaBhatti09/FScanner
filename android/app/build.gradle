@@ -109,7 +109,7 @@ android {
 
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
-    // implementation fileTree(dir: "libs", include: ["*.jar"])
+    implementation files('libs/fplib-reader-v3.jar')
     implementation("com.facebook.react:react-android")
     implementation project(':react-native-bluetooth-classic')
 

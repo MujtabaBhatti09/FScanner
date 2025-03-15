@@ -20,10 +20,13 @@
     "react-native-ble-plx": "^3.5.0",
     "react-native-bluetooth-classic": "^1.73.0-rc.13",
     "react-native-fs": "^2.20.0",
+    "react-native-image-resizer": "^1.4.5",
+    "react-native-paper": "^5.13.1",
     "react-native-permissions": "^5.2.6",
     "react-native-reanimated": "^3.17.1",
     "react-native-safe-area-context": "^5.3.0",
     "react-native-screens": "^4.9.1",
+    "react-native-vector-icons": "^10.2.0",
     "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
