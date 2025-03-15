@@ -1,9 +1,11 @@
 import "../global.css";
 import { Buffer } from 'buffer';
+import RNFS from 'react-native-fs';
 import Logo from "../assets/logo.png";
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Alert, Image, ScrollView, StatusBar, useWindowDimensions, PermissionsAndroid, Platform } from "react-native";
 import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+import { View, Text, TouchableOpacity, Alert, Image, ScrollView, StatusBar, useWindowDimensions, PermissionsAndroid, Platform } from "react-native";
+// import { convertToBitmap, processFingerprint } from "../common/utils/BitmapCoversion";
 
 export default function BluetoothClassic() {
 
@@ -12,29 +14,44 @@ export default function BluetoothClassic() {
   const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
   const [bluetoothEnabled, setBluetoothEnabled] = useState<boolean>(false);
   const [fingerprintImage, setFingerprintImage] = useState<string | null>(null);
-  const CMD_GETCHAR = 0x31;
-  const CMD_PASSWORD = 0x01;
-  const CMD_ENROLID = 0x02;
-  const CMD_VERIFY = 0x03;
-  const CMD_IDENTIFY = 0x04;
-  const CMD_DELETEID = 0x05;
-  const CMD_CLEARID = 0x06;
-  const CMD_ENROLHOST = 0x07;
-  const CMD_CAPTUREHOST = 0x08;
-  const CMD_MATCH = 0x09;
-  const CMD_WRITEFPCARD = 0x0A;
-  const CMD_WRITEDATACARD = 0x0B;
-  const CMD_READFPCARD = 0x0C;
-  const CMD_READDATACARD = 0x0D;
-  const CMD_FPCARDMATCH = 0x0E;
-  const CMD_CARDSN = 0x0F;
-  const CMD_GETSN = 0x10;
-  const CMD_GETBAT = 0x11;
-  const CMD_GETIMAGE = 0x12;
+  const [loading, setLoading] = useState<boolean>(false)
+
+  const CMD_PASSWORD = 0x01;    // Password
+  const CMD_ENROLID = 0x02;     // Enroll in Device
+  const CMD_VERIFY = 0x03;      // Verify in Device
+  const CMD_IDENTIFY = 0x04;    // Identify in Device
+  const CMD_DELETEID = 0x05;    // Delete in Device
+  const CMD_CLEARID = 0x06;     // Clear in Device
+  const CMD_ENROLHOST = 0x07;   // Enroll to Host
+  const CMD_CAPTUREHOST = 0x08; // Capture to Host
+  const CMD_MATCH = 0x09;       // Match
+  const CMD_WRITEFPCARD = 0x0A; // Write Card Data
+  const CMD_READFPCARD = 0x0B;  // Read Card Data
+  const CMD_CARDSN = 0x0E;      // Read Card Sn
+  const CMD_GETSN = 0x10;       // Get SN
+  const CMD_FPCARDMATCH = 0x13; // Card Match
+  const CMD_WRITEDATACARD = 0x14; // Write Card Data
+  const CMD_READDATACARD = 0x15;  // Read Card Data
+  const CMD_GETBAT = 0x21;      // Get Battery
+  const CMD_GETIMAGE = 0x30;    // Get Image
+  const CMD_GETCHAR = 0x31;     // Get Char
+  const CMD_UPCARDSN = 0x43;    // Up Card SN
+  const CMD_SETTIMEOUT = 0x50;  // Set Timeout
+  const CMD_STOPWORK = 0x51;    // Stop Work
+
+  // Class variables
+  let mIsWork = false;
+  let mDeviceCmd = 0;
+  let mCmdSize = 0;
+  let mUpImageSize = 0;
+
 
   const getPairedDevices = async () => {
     try {
-      if (!bluetoothEnabled) {
+      if (bluetoothEnabled) {
+        console.log("Bluetooth Already Enabled")
+      }
+      else if (!bluetoothEnabled) {
         Alert.alert("Bluetooth is Off", "Please turn on Bluetooth first", [
           { text: "Turn On", onPress: enableBluetooth },
           { text: "Cancel", style: "cancel" },
@@ -52,6 +69,7 @@ export default function BluetoothClassic() {
 
   useEffect(() => {
     checkBluetoothStatus();
+    getPairedDevices()
   }, []);
 
   // Check if Bluetooth is enabled
@@ -93,7 +111,230 @@ export default function BluetoothClassic() {
     }
   };
 
+  // Utility function to calculate checksum
+  const calcCheckSum = (buffer: Uint8Array, length: number) => {
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      sum += buffer[i];
+    }
+    return sum & 0x00ff; // Match Java implementation exactly (0x00ff, not 0xffff)
+  };
+
+  // Utility function to add status messages
+  const AddStatusList = (message: string) => {
+    console.log(message);
+  };
+
+  // Timeout functionality
+  const TimeOutStart = () => {
+    console.log("Starting timeout timer");
+  };
+
+  // const sendCommand = async (cmdId: number, data: number[] = []) => {
+  //   if (mIsWork) return;
+
+  //   if (!connectedDevice || !connectedDevice.isConnected) {
+  //     Alert.alert("Error", "No device connected or connection lost.");
+  //     return;
+  //   }
+
+  //   try {
+  //     let size = data.length;
+  //     let sendSize = 9 + size;
+  //     let sendBuf = new Uint8Array(sendSize);
+
+  //     sendBuf[0] = "F".charCodeAt(0);
+  //     sendBuf[1] = "T".charCodeAt(0);
+  //     sendBuf[2] = 0;
+  //     sendBuf[3] = 0;
+  //     sendBuf[4] = cmdId;
+  //     sendBuf[5] = size & 0xff;
+  //     sendBuf[6] = (size >> 8) & 0xff;
+
+  //     if (size > 0) {
+  //       for (let i = 0; i < size; i++) {
+  //         sendBuf[7 + i] = data[i];
+  //       }
+  //     }
+
+  //     // Calculate checksum
+  //     let sum = calcCheckSum(sendBuf, (7 + size));
+  //     sendBuf[7 + size] = sum & 0xff;
+  //     sendBuf[8 + size] = (sum >> 8) & 0xff;
+
+  //     mIsWork = true;
+  //     TimeOutStart();
+  //     mDeviceCmd = cmdId;
+  //     mCmdSize = 0;
+
+  //     await connectedDevice.write(Buffer.from(sendBuf));
+
+  //     // Process command type and update status
+  //     switch (cmdId) {
+  //       case CMD_PASSWORD:
+  //         // Password handling
+  //         break;
+  //       case CMD_ENROLID:
+  //         AddStatusList("Enrol ID ...");
+  //         break;
+  //       case CMD_VERIFY:
+  //         AddStatusList("Verify ID ...");
+  //         break;
+  //       case CMD_IDENTIFY:
+  //         AddStatusList("Search ID ...");
+  //         break;
+  //       case CMD_DELETEID:
+  //         AddStatusList("Delete ID ...");
+  //         break;
+  //       case CMD_CLEARID:
+  //         AddStatusList("Clear ...");
+  //         break;
+  //       case CMD_ENROLHOST:
+  //         AddStatusList("Enrol Template ...");
+  //         break;
+  //       case CMD_CAPTUREHOST:
+  //         AddStatusList("Capture Template ...");
+  //         break;
+  //       case CMD_MATCH:
+  //         AddStatusList("Match Template ...");
+  //         break;
+  //       case CMD_WRITEFPCARD:
+  //       case CMD_WRITEDATACARD:
+  //         AddStatusList("Write Card ...");
+  //         break;
+  //       case CMD_READFPCARD:
+  //       case CMD_READDATACARD:
+  //         AddStatusList("Read Card ...");
+  //         break;
+  //       case CMD_FPCARDMATCH:
+  //         AddStatusList("FingerprintCard Match ...");
+  //         break;
+  //       case CMD_CARDSN:
+  //         AddStatusList("Read Card SN ...");
+  //         break;
+  //       case CMD_GETSN:
+  //         AddStatusList("Get Device SN ...");
+  //         break;
+  //       case CMD_GETBAT:
+  //         AddStatusList("Get Battery Value ...");
+  //         break;
+  //       case CMD_GETIMAGE:
+  //         mUpImageSize = 0;
+  //         AddStatusList("Get Fingerprint Image ...");
+  //         break;
+  //       case CMD_GETCHAR:
+  //         AddStatusList("Get Fingerprint Data ...");
+  //         break;
+  //     }
+  //     setLoading(true)
+  //     // Delay before reading response
+  //     await new Promise(resolve => setTimeout(resolve, 500));
+  //     let response: any = await connectedDevice.read();
+  //     console.log("Raw response:", response);
+
+  //     if (!response) {
+  //       setLoading(false)
+  //       console.log("Device returned null. Check connection and command format.");
+  //       return null;
+  //     }
+  //     console.log(cmdId === CMD_GETIMAGE)
+  //     if (cmdId === CMD_GETIMAGE || cmdId === CMD_GETCHAR) {
+  //       setLoading(false)
+  //       console.log("Response:", response);
+  //       const imageDataUrl = processFingerprint(response);
+  //       if (imageDataUrl) {
+  //         // Return the image data URL that can be used in an <Image> component
+  //         return imageDataUrl;
+  //       }
+  //     }
+
+  //     // Process other responses...
+  //     return response;
+  //   } catch (error) {
+  //     setLoading(false)
+  //     console.error("Command error:", error);
+  //     Alert.alert("Error", "Failed to communicate with device");
+  //     return null;
+  //   } finally {
+  //     setLoading(false)
+  //     mIsWork = false;
+  //   }
+  // };
+
+  // const processFingerprint = (response: Buffer | Uint8Array): string | null => {
+  //   try {
+  //     // Verify the response starts with 'FT'
+  //     if (response[0] !== 'F'.charCodeAt(0) || response[1] !== 'T'.charCodeAt(0)) {
+  //       console.error("Invalid response format, doesn't start with FT");
+  //       return null;
+  //     }
+
+  //     // Parse the response header
+  //     const cmdId = response[4];
+
+  //     // Get the data length (little endian)
+  //     const dataLength = response[5] + (response[6] << 8);
+
+  //     // Extract the image data (starts at position 7)
+  //     const imageData = response.slice(7, 7 + dataLength);
+
+  //     // For fingerprint images (CMD_GETCHAR or CMD_GETIMAGE)
+  //     if (cmdId === CMD_GETCHAR || cmdId === CMD_GETIMAGE) {
+  //       // Convert the raw image data to a bitmap format
+  //       convertToBitmap(imageData);
+  //     }
+
+  //     return null;
+  //   } catch (error) {
+  //     console.error("Error processing fingerprint data:", error);
+  //     return null;
+  //   }
+  // };
+
+  // Function to convert raw fingerprint data to a displayable image
+  // const convertToBitmap = (data: Uint8Array | Buffer): string => {
+  //   // For a grayscale fingerprint image:
+  //   // 1. Determine the dimensions (typically fixed for the scanner model)
+  //   const width = 256; // Adjust based on your scanner's specifications
+  //   const height = 288; // Adjust based on your scanner's specifications
+
+  //   // 2. Create a canvas element (using react-native-canvas or a similar library)
+  //   const canvas = document.createElement('canvas');
+  //   canvas.width = width;
+  //   canvas.height = height;
+  //   const ctx = canvas.getContext('2d');
+
+  //   if (!ctx) {
+  //     console.error("Could not get canvas context");
+  //     return '';
+  //   }
+
+  //   // 3. Create an ImageData object
+  //   const imageData = ctx.createImageData(width, height);
+
+  //   // 4. Fill the ImageData with the fingerprint data
+  //   for (let i = 0; i < data.length && i < width * height; i++) {
+  //     const value = data[i]; // Grayscale value
+
+  //     // For each pixel, set RGBA values (grayscale)
+  //     imageData.data[i * 4] = value;     // R
+  //     imageData.data[i * 4 + 1] = value; // G
+  //     imageData.data[i * 4 + 2] = value; // B
+  //     imageData.data[i * 4 + 3] = 255;   // Alpha (fully opaque)
+  //   }
+
+  //   // 5. Put the image data on the canvas
+  //   ctx.putImageData(imageData, 0, 0);
+
+  //   // 6. Convert to base64 data URL that can be used as an image source
+  //   return canvas.toDataURL('image/png');
+  // };
+
+  // Scan Fingerprint
+
   const sendCommand = async (cmdId: number, data: number[] = []) => {
+    if (mIsWork) return;
+
     if (!connectedDevice || !connectedDevice.isConnected) {
       Alert.alert("Error", "No device connected or connection lost.");
       return;
@@ -119,12 +360,74 @@ export default function BluetoothClassic() {
       }
 
       // Calculate checksum
-      let checksum = calcCheckSum(sendBuf, 7 + size);
-      sendBuf[7 + size] = checksum & 0xff;
-      sendBuf[8 + size] = (checksum >> 8) & 0xff;
+      let sum = calcCheckSum(sendBuf, (7 + size));
+      sendBuf[7 + size] = sum & 0xff;
+      sendBuf[8 + size] = (sum >> 8) & 0xff;
+
+      mIsWork = true;
+      TimeOutStart();
+      mDeviceCmd = cmdId;
+      mCmdSize = 0;
 
       await connectedDevice.write(Buffer.from(sendBuf));
-      console.log(`Sent command: ${cmdId}`);
+
+      // Process command type and update status
+      switch (cmdId) {
+        case CMD_PASSWORD:
+          // Password handling
+          break;
+        case CMD_ENROLID:
+          AddStatusList("Enrol ID ...");
+          break;
+        case CMD_VERIFY:
+          AddStatusList("Verify ID ...");
+          break;
+        case CMD_IDENTIFY:
+          AddStatusList("Search ID ...");
+          break;
+        case CMD_DELETEID:
+          AddStatusList("Delete ID ...");
+          break;
+        case CMD_CLEARID:
+          AddStatusList("Clear ...");
+          break;
+        case CMD_ENROLHOST:
+          AddStatusList("Enrol Template ...");
+          break;
+        case CMD_CAPTUREHOST:
+          AddStatusList("Capture Template ...");
+          break;
+        case CMD_MATCH:
+          AddStatusList("Match Template ...");
+          break;
+        case CMD_WRITEFPCARD:
+        case CMD_WRITEDATACARD:
+          AddStatusList("Write Card ...");
+          break;
+        case CMD_READFPCARD:
+        case CMD_READDATACARD:
+          AddStatusList("Read Card ...");
+          break;
+        case CMD_FPCARDMATCH:
+          AddStatusList("FingerprintCard Match ...");
+          break;
+        case CMD_CARDSN:
+          AddStatusList("Read Card SN ...");
+          break;
+        case CMD_GETSN:
+          AddStatusList("Get Device SN ...");
+          break;
+        case CMD_GETBAT:
+          AddStatusList("Get Battery Value ...");
+          break;
+        case CMD_GETIMAGE:
+          mUpImageSize = 0;
+          AddStatusList("Get Fingerprint Image ...");
+          break;
+        case CMD_GETCHAR:
+          AddStatusList("Get Fingerprint Data ...");
+          break;
+      }
 
       // Delay before reading response
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -136,110 +439,31 @@ export default function BluetoothClassic() {
         return;
       }
 
-      // Handle command responses
-      switch (cmdId) {
-        case CMD_PASSWORD:
-          console.log("Processing Password Command...");
-          break;
-        case CMD_ENROLID:
-          console.log("Enrol ID...");
-          break;
-        case CMD_VERIFY:
-          console.log("Verify ID...");
-          break;
-        case CMD_IDENTIFY:
-          console.log("Search ID...");
-          break;
-        case CMD_DELETEID:
-          console.log("Delete ID...");
-          break;
-        case CMD_CLEARID:
-          console.log("Clear...");
-          break;
-        case CMD_ENROLHOST:
-          console.log("Enrol Template...");
-          break;
-        case CMD_CAPTUREHOST:
-          console.log("Capture Template...");
-          break;
-        case CMD_MATCH:
-          console.log("Match Template...");
-          break;
-        case CMD_WRITEFPCARD:
-        case CMD_WRITEDATACARD:
-          console.log("Write Card...");
-          break;
-        case CMD_READFPCARD:
-        case CMD_READDATACARD:
-          console.log("Read Card...");
-          break;
-        case CMD_FPCARDMATCH:
-          console.log("Fingerprint Card Match...");
-          break;
-        case CMD_CARDSN:
-          console.log("Read Card SN...");
-          break;
-        case CMD_GETSN:
-          console.log("Get Device SN...");
-          break;
-        case CMD_GETBAT:
-          console.log("Get Battery Value...");
-          break;
-        case CMD_GETIMAGE:
-          console.log("Get Fingerprint Image...");
-          break;
-        case CMD_GETCHAR:
-          console.log("Get Fingerprint Data...");
-          break;
-        default:
-          console.log("Unknown Command...");
-      }
+      // Process response here
+      // ...
+
     } catch (error) {
       console.error("Command error:", error);
       Alert.alert("Error", "Failed to communicate with device");
+    } finally {
+      mIsWork = false; // Reset work state regardless of outcome
     }
   };
 
-  // Utility function to calculate checksum
-  const calcCheckSum = (buffer: Uint8Array, length: number) => {
-    let sum = 0;
-    for (let i = 0; i < length; i++) {
-      sum += buffer[i];
-    }
-    return sum & 0xffff;
-  };
-
-  // Scan Fingerprint
   const scanFingerprint = async () => {
     await sendCommand(CMD_GETCHAR);
   };
 
-  // const readResponse = async () => {
-  //   try {
-  //     let fullResponse = "";
-  //     while (true) {
-  //       let chunk = await connectedDevice.read();
-  //       if (!chunk) break;
-  //       fullResponse += chunk;
-  //     }
-  //     console.log("Full response:", fullResponse);
-  //     return fullResponse;
-  //   } catch (error) {
-  //     console.error("Read error:", error);
-  //     return null;
+  // const scanFingerprint = async () => {
+  //   const imageData = await sendCommand(CMD_GETCHAR);
+
+  //   if (imageData) {
+  //     // Display the fingerprint image
+  //     setFingerprintImage(imageData); // Assuming you have a state variable for this
+  //   } else {
+  //     console.error("Failed to get fingerprint image");
   //   }
   // };
-
-
-  // Scan fingerprint
-  // const scanFingerprint = async () => {
-  //   await sendCommand(0x2048); // Correct command for fingerprint scan
-  // };
-
-  useEffect(() => {
-    getPairedDevices();
-    // readResponse()
-  }, []);
 
   return (
     <ScrollView className="bg-white p-2">

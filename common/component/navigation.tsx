@@ -11,8 +11,8 @@ export default function NavigatorComponent() {
         <>
             <StatusBar backgroundColor={"transparent"} translucent />
             <NavigationContainer>
-                <Stack.Navigator initialRouteName="Splash">
-                    <Stack.Screen options={{ headerShown: false }} name="Splash" component={Splash} />
+                <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+                    <Stack.Screen name="Splash" component={Splash} />
                     <Stack.Screen name="Bluetooth Classic" component={BluetoothClassic} />
                 </Stack.Navigator>
             </NavigationContainer>
