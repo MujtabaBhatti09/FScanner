@@ -2,7 +2,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BluetoothBLE from '../../screens/bluetoothScannerBLE';
 import BluetoothClassic from '../../screens/bluetoothScanner';
-import Home from '../../screens/home';
+import Splash from '../../screens/splash';
 import { StatusBar } from 'react-native';
 
 export default function NavigatorComponent() {
@@ -11,9 +11,8 @@ export default function NavigatorComponent() {
         <>
             <StatusBar backgroundColor={"transparent"} translucent />
             <NavigationContainer>
-                <Stack.Navigator initialRouteName="Home">
-                    <Stack.Screen options={{ headerShown: false }} name="Home" component={Home} />
-                    <Stack.Screen name="Bluetooth BLE" component={BluetoothBLE} />
+                <Stack.Navigator initialRouteName="Splash">
+                    <Stack.Screen options={{ headerShown: false }} name="Splash" component={Splash} />
                     <Stack.Screen name="Bluetooth Classic" component={BluetoothClassic} />
                 </Stack.Navigator>
             </NavigationContainer>
