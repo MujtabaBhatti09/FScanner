@@ -5,6 +5,7 @@ import Logo from "../assets/logo.png";
 import React, { useEffect, useState } from "react";
 import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { View, Text, TouchableOpacity, Alert, Image, ScrollView, StatusBar, useWindowDimensions, PermissionsAndroid, Platform } from "react-native";
+import { decodeResponse, decodeWithPolyfill, manualDecode } from "../common/utils/Decode";
 // import { convertToBitmap, processFingerprint } from "../common/utils/BitmapCoversion";
 
 export default function BluetoothClassic() {
@@ -433,7 +434,11 @@ export default function BluetoothClassic() {
       await new Promise(resolve => setTimeout(resolve, 500));
       let response = await connectedDevice.read();
       console.log("Raw response:", response);
-
+      const decodedResponse = decodeWithPolyfill(response)
+      console.log("Decoded response:", decodedResponse);
+      decodeResponse(response)
+      // const manualResponse = manualDecode(response)
+      // console.log("Decoded response:", manualResponse);
       if (!response) {
         console.log("Device returned null. Check connection and command format.");
         return;
